@@ -11,10 +11,13 @@ from pathlib import Path
 
 from jpsubs import probe
 from jpsubs.clean import Cue, clean_cues, fix_timing, looks_japanese, to_srt
+from jpsubs.gapfill import second_look
 from jpsubs.retime import find_alass, retime
 from jpsubs.transcribe import DEFAULT_MODEL, Transcriber, ensure_cuda_libs
 
 MIN_CUES = 5  # fewer than this and a track is signs/credits, not dialogue
+MIN_DIALOGUE_WINDOWS = 20  # a track with fewer timed lines cannot map an episode's dialogue
+MAX_TRACKS_TRIED = 3
 
 
 @dataclass
@@ -69,6 +72,11 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--subs", type=Path, help="subtitle file to use for a single video (retimed to its audio)")
     p.add_argument("--whisper-only", action="store_true", help="ignore existing subtitles, always transcribe")
     p.add_argument("--no-retime", action="store_true", help="use external subtitle files without retiming")
+    p.add_argument(
+        "--no-second-look",
+        action="store_true",
+        help="skip re-transcribing dialogue that Whisper's first pass left without a line",
+    )
     p.add_argument("--force", action="store_true", help="redo videos that already have a .ja.srt (old file kept as .bak)")
     p.add_argument("--dry-run", action="store_true", help="show which source each video would use, write nothing")
     p.add_argument("--model", default=DEFAULT_MODEL, help=f"Whisper model name or path (default {DEFAULT_MODEL})")
@@ -115,7 +123,9 @@ class _Runner:
             source = f"whisper {args.model} (audio track #{audio.index} {audio.lang or 'untagged'})"
             if args.dry_run:
                 return Result(video, "planned", source)
-            cues = self._whisper(video, audio)
+            cues, recovered = self._whisper(video, audio, streams)
+            if recovered:
+                source += f", {recovered} recovered by second look"
 
         if args.dry_run:
             return Result(video, "planned", source)
@@ -156,7 +166,8 @@ class _Runner:
             return cues, f"{path.name} ({note})"
         return None, ""
 
-    def _whisper(self, video: Path, audio: probe.Stream) -> list[Cue]:
+    def _whisper(self, video: Path, audio: probe.Stream, streams: list[probe.Stream]) -> tuple[list[Cue], int]:
+        """Transcribe one video. Returns the cues and how many the second look added."""
         if self._transcriber is None:
             print(f"    loading model {self.args.model} ...", flush=True)
             self._transcriber = Transcriber(self.args.model, self.args.device)
@@ -168,11 +179,30 @@ class _Runner:
             if tty:
                 print(f"\r    transcribing {frac:4.0%}", end="", file=sys.stderr, flush=True)
 
-        cues = self._transcriber.transcribe(samples, progress)
+        cues = clean_cues(self._transcriber.transcribe(samples, progress), drop_hallucinations=True)
         if tty:
             print("\r" + " " * 30 + "\r", end="", file=sys.stderr)
+
+        recovered: list[Cue] = []
+        if not self.args.no_second_look:
+            windows = self._dialogue_windows(video, streams)
+            recovered = clean_cues(
+                second_look(self._transcriber, samples, windows, cues), drop_hallucinations=True
+            )
+            cues = clean_cues(cues + recovered, drop_hallucinations=True)
         print(f"    transcribed in {time.monotonic() - started:.0f}s", flush=True)
-        return fix_timing(clean_cues(cues, drop_hallucinations=True))
+        return fix_timing(cues), len(recovered)
+
+    def _dialogue_windows(self, video: Path, streams: list[probe.Stream]) -> list[tuple[float, float]]:
+        """When dialogue happens, from the first subtitle track that times a whole episode."""
+        for stream in probe.dialogue_track_order(streams)[:MAX_TRACKS_TRIED]:
+            try:
+                windows = probe.load_dialogue_windows(video, stream)
+            except (subprocess.CalledProcessError, ValueError):
+                continue
+            if len(windows) >= MIN_DIALOGUE_WINDOWS:
+                return windows
+        return []
 
 
 def _stderr(exc: Exception) -> str:

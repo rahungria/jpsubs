@@ -11,6 +11,7 @@ from typing import Callable
 import numpy as np
 
 from jpsubs.clean import Cue, Word, split_words
+from jpsubs.gapfill import Candidate
 from jpsubs.probe import SAMPLE_RATE
 
 DEFAULT_MODEL = "large-v3-turbo"
@@ -72,3 +73,25 @@ class Transcriber:
             if progress and duration:
                 progress(min(1.0, seg.end / duration))
         return cues
+
+    def transcribe_window(self, audio: np.ndarray, start: float, end: float) -> list[Candidate]:
+        """Transcribe one stretch on its own, without the voice filter. Times are episode time."""
+        clip = audio[int(start * SAMPLE_RATE) : int(end * SAMPLE_RATE)]
+        if len(clip) == 0:
+            return []
+        segments, _info = self.model.transcribe(
+            clip,
+            language="ja",
+            vad_filter=False,
+            condition_on_previous_text=False,
+            word_timestamps=True,
+        )
+        out: list[Candidate] = []
+        for seg in segments:
+            words = [Word(start + w.start, start + w.end, w.word) for w in (seg.words or [])]
+            cues = split_words(words) if words else [Cue(start + seg.start, start + seg.end, seg.text.strip())]
+            for cue in cues:
+                cue.start = min(max(cue.start, start), end)
+                cue.end = min(max(cue.end, cue.start), end)
+            out.append(Candidate(cues, seg.text.strip(), seg.avg_logprob))
+        return out
