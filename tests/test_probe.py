@@ -84,3 +84,42 @@ def test_load_shift_jis_srt(tmp_path: Path):
     srt = tmp_path / "a.srt"
     srt.write_bytes("1\n00:00:01,000 --> 00:00:02,000\nこんにちは\n".encode("shift_jis"))
     assert load_sub_file(srt)[0].text == "こんにちは"
+
+
+def test_dialogue_track_order_prefers_english_dialogue():
+    from jpsubs.probe import dialogue_track_order
+
+    s = streams(
+        ("subtitle", "ass", "eng", "Signs and Songs", {}),
+        ("subtitle", "ass", "spa", "Spanish", {}),
+        ("subtitle", "hdmv_pgs_subtitle", "eng", "English", {}),
+        ("subtitle", "ass", "eng", "English", {}),
+    )
+    assert [x.index for x in dialogue_track_order(s)] == [3, 1, 0]
+
+
+def test_dialogue_windows_skip_songs_signs_and_placed_text(tmp_path: Path):
+    import pysubs2
+
+    from jpsubs.probe import dialogue_windows
+
+    ass = tmp_path / "a.ass"
+    head = (
+        "[Script Info]\nScriptType: v4.00+\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize\n"
+        + "".join(f"Style: {n},Arial,20\n" for n in ["Default", "Show Thoughts", "Show OP", "ED romaji", "TS_Sign", "Top"])
+        + "\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    )
+    lines = [
+        "Dialogue: 0,0:00:05.00,0:00:06.50,Default,,0,0,0,,Spoken line",
+        "Dialogue: 0,0:00:01.00,0:00:02.00,Show Thoughts,,0,0,0,,{\\i1}Inner voice",
+        "Dialogue: 0,0:00:10.00,0:00:12.00,Show OP,,0,0,0,,opening song",
+        "Dialogue: 0,0:00:12.00,0:00:14.00,ED romaji,,0,0,0,,ending song",
+        "Dialogue: 0,0:00:15.00,0:00:16.00,TS_Sign,,0,0,0,,a sign",
+        "Dialogue: 0,0:00:17.00,0:00:18.00,Default,,0,0,0,,{\\pos(100,200)}placed text",
+        "Dialogue: 0,0:00:19.00,0:00:20.00,Default,,0,0,0,,{\\k20}ka{\\k30}ra",
+        "Dialogue: 0,0:00:21.00,0:00:21.10,Default,,0,0,0,,flash",
+        "Dialogue: 0,0:00:22.00,0:00:23.00,Top,,0,0,0,,{\\an8}Spoken, shown at the top",
+        "Comment: 0,0:00:30.00,0:00:31.00,Default,,0,0,0,,note to self",
+    ]
+    ass.write_text(head + "\n".join(lines) + "\n", encoding="utf-8")
+    assert dialogue_windows(pysubs2.load(str(ass))) == [(1.0, 2.0), (5.0, 6.5), (22.0, 23.0)]

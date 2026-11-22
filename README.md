@@ -9,7 +9,10 @@ For each video the first source that works is used:
    text are ignored, as are image-based tracks (PGS/VobSub).
 2. **A subtitle file next to the video** with the same name (`Episode 01.srt`, `Episode 01.jpn.ass`),
    or one passed with `--subs`. It is retimed to the video's Japanese audio with `alass`.
-3. **Whisper speech recognition** on the GPU (`large-v3-turbo` by default).
+3. **Whisper speech recognition** on the GPU (`large-v3-turbo` by default), followed by a
+   **second look**: the filter in front of Whisper discards some short or quiet lines, so stretches
+   where another subtitle track in the file shows dialogue but no Japanese line came out are
+   transcribed again on their own. Only that track's timing is used, never its text.
 
 ## Usage
 
@@ -21,6 +24,7 @@ jpsubs episode.mkv --subs download.srt # use a downloaded subtitle file, retimed
 jpsubs --whisper-only episode.mkv      # ignore existing subtitles
 jpsubs --force episode.mkv             # redo; the old .ja.srt is kept as .ja.srt.bak
 jpsubs --model large-v3 episode.mkv    # slower model, similar accuracy
+jpsubs --no-second-look episode.mkv    # first Whisper pass only
 ```
 
 Videos that already have a `.ja.srt` are skipped, so re-running on a folder only does new episodes.
@@ -40,10 +44,16 @@ Config lives in `~/.config/mpv/mpv.conf` and `~/.config/mpv/script-opts/subs2srs
 
 ## What to expect from Whisper
 
-Measured on one episode against human-made Japanese subtitles: about 90% of the subtitle text is
-recovered, line starts are typically within 0.3 s, and an episode takes 15 to 40 seconds on an
-RTX 5070. Names, songs and overlapping speech are where it goes wrong, so treat generated lines as
-a listening aid. When a human-made file exists (for example from Jimaku), `--subs` gives better text.
+Measured on one episode against human-made Japanese subtitles: about 91% of the subtitle text is
+recovered and about 94% of kanji are the right ones, line starts are typically within 0.3 s, and an
+episode takes about 20 seconds on an RTX 5070. Names, songs, overlapping speech and words that sound
+alike are where it goes wrong, so treat generated lines as a listening aid. When a human-made file
+exists (for example from Jimaku), `--subs` gives better text.
+
+The second look cut dialogue left without a line from about 5% to under 1% on two test episodes.
+Lines it recovers are short and quiet, and less reliable than the rest: of 14 checked against human
+subtitles, 10 were right or partly right. It needs a text subtitle track in the file (any language)
+to know where dialogue is; without one, only the first pass runs. Songs are not chased.
 
 `kotoba-whisper-v2.0-faster` crashes with this setup and is not supported.
 
