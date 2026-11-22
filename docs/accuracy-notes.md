@@ -41,8 +41,8 @@ again on their own without the filter (`gapfill.py`).
 
 Recovered lines are short and quiet and less reliable than the rest: of 14 compared with the human
 track, 6 were right, 4 partly right and 4 wrong. Whisper's confidence does not separate the wrong
-ones (wrong lines scored as high as -0.25, right ones as low as -0.98), so the cutoff of -1.0 only
-removes the clearest guesses.
+ones (wrong lines scored as high as -0.25, mostly right ones as low as -0.98), so the cutoff of -1.0
+only removes the clearest guesses.
 
 ## Wrong kanji for words that sound alike (not fixed)
 
@@ -57,7 +57,7 @@ example 各人物 where 書く人物 was said. On episode A:
 | Different sound (misheard or reworded) | 17 | 1.7% |
 | Not transcribed | 6 | 0.6% |
 
-About 12 of the 31 same-sound differences are spelling choices (すべて for 全て), not mistakes, so
+About 10 of the 31 same-sound differences are spelling choices (すべて for 全て), not mistakes, so
 the real room for improvement is close to 2 points.
 
 ### Whisper settings: no effect
@@ -72,9 +72,11 @@ Kanji match on episode A, measured before the second look existed:
 | `large-v3`, previous lines as context | 92.8% |
 | Majority of 5 passes with different voice-filter settings | 94.4% |
 
-- A glossary of show terms as prompt or hotwords, and a wider beam, did not fix the example line.
-- The example line comes out right or wrong depending on where the 30-second windows fall, and was
-  wrong in every full-episode variant.
+- The example line is unstable. On a one-minute clip around it both models wrote it correctly; in
+  every full-episode run (the settings above and five voice-filter variants) it came out wrong,
+  because the 30-second windows fall differently.
+- On that clip a wider beam changed nothing, and a glossary of show terms given as prompt or
+  hotwords made the turbo model get the line wrong.
 - Confidence is no guide: the wrong word in the example was written at 0.89. Treating words under
   0.85 as doubtful catches 24 of 67 wrong kanji words and flags 52 of 899 correct ones.
 
