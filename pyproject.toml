@@ -1,0 +1,28 @@
+[project]
+name = "jpsubs"
+version = "0.1.0"
+description = "Japanese subtitle sidecar files for local video, for mining with mpv + Yomitan"
+readme = "README.md"
+authors = [
+    { name = "raphi", email = "rhja93@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "faster-whisper>=1.2.1",
+    "numpy>=2.5.5",
+    "nvidia-cublas-cu12>=12.9.3.13",
+    "nvidia-cudnn-cu12>=9.28.1.4",
+    "pysubs2>=1.9.1",
+]
+
+[project.scripts]
+jpsubs = "jpsubs.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
