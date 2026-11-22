@@ -55,7 +55,21 @@ Lines it recovers are short and quiet, and less reliable than the rest: of 14 ch
 subtitles, 10 were right or partly right. It needs a text subtitle track in the file (any language)
 to know where dialogue is; without one, only the first pass runs. Songs are not chased.
 
-`kotoba-whisper-v2.0-faster` crashes with this setup and is not supported.
+## Known limitations
+
+- **Words that sound alike can get the wrong kanji.** About 1 kanji in 20 differs from human-made
+  subtitles, and roughly half of those are a same-sounding word written differently (進学 where 神学
+  was said). No Whisper setting improves this. The audio on the card is right even when the text is
+  not, so check a doubtful word by ear.
+- **Lines recovered by the second look are less reliable** than the rest (see above).
+- **No second look without a text subtitle track** in the file.
+- **Songs** are mostly left untranscribed.
+- `kotoba-whisper-v2.0-faster` crashes with this setup and is not supported.
+
+When accuracy matters for a show, a human-made subtitle file passed with `--subs` avoids all of
+these. What was measured, and what was tried and shelved (model settings, correction with a local
+language model, automatic download of human-made subtitles), is in
+[docs/accuracy-notes.md](docs/accuracy-notes.md).
 
 ## Development
 
