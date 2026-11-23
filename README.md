@@ -42,6 +42,43 @@ the line, `Ctrl+m` attach audio and screenshot to the last card by hand, `a` ope
 
 Config lives in `~/.config/mpv/mpv.conf` and `~/.config/mpv/script-opts/subs2srs.conf`.
 
+### English line on hover, and image subtitle tracks
+
+When a video opens, mpvacious puts an English track in mpv's secondary subtitle slot, shown at the
+top of the window while the mouse is there. mpv can only draw text tracks (ASS, SRT) in that slot.
+When the file's English tracks are images (PGS, VobSub; common in BD releases), nothing shows on
+hover, and worse, the English track is then held in the secondary slot, so `j` can't select it as
+the main subtitle: the OSD names the English track but the screen stays empty.
+
+`~/.config/mpv/scripts/no-image-secondary-subs.lua` clears the secondary slot when it holds an image
+track, so `j` reaches the English track again. Text English tracks keep working on hover.
+
+```lua
+-- mpv can't draw image subtitles (PGS, VobSub, DVB) as secondary subtitles.
+-- When one ends up there (mpvacious picks a secondary English track on load),
+-- clear it, so the track stays free to be picked as main subtitle with `j`.
+local image_codecs = {
+    hdmv_pgs_subtitle = true,
+    dvd_subtitle = true,
+    dvb_subtitle = true,
+    xsub = true,
+}
+
+mp.observe_property("secondary-sid", "native", function(_, sid)
+    if not sid then return end
+    for _, track in ipairs(mp.get_property_native("track-list", {})) do
+        if track.type == "sub" and track.id == sid and image_codecs[track.codec] then
+            mp.msg.info("secondary track " .. sid .. " is an image track (" .. track.codec .. "), clearing it")
+            mp.set_property("secondary-sid", "no")
+            return
+        end
+    end
+end)
+```
+
+With image English tracks there is no English line on hover; switch to the English track with `j`
+when you need it.
+
 ## What to expect from Whisper
 
 Measured on one episode against human-made Japanese subtitles: about 91% of the subtitle text is
